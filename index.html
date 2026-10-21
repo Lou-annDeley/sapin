@@ -282,7 +282,7 @@ const catClass = c => ({Perso:"c-perso", Pro:"c-pro", "Santé":"c-sante"}[c] || 
 const REMIND = [["1w","1 semaine avant",10080],["1d","La veille",1440],["2h","2 h avant",120],["30m","30 min avant",30]];
 const STATUS = ["À envoyer","Envoyée","Relancée","Entretien","Acceptée","Refusée"];
 const ACTIVE = ["À envoyer","Envoyée","Relancée","Entretien"];
-const HABIT_SUGG = [["Brosser les dents · matin","dent"],["Brosser les dents · soir","dent"],["Prendre une douche","douche"],["Faire son lit","lit"],["Boire de l'eau","eau"],["Se démaquiller","soin"],["Prendre ses vitamines","pilule"],["Se coucher avant minuit","lune"]];
+const HABIT_SUGG = [["Brosser les dents · matin","dent"],["Brosser les dents · soir","dent"],["Prendre une douche","douche"],["Faire son lit","lit"],["Boire de l'eau","eau"],["Se démaquiller","soin"],["Skincare du soir","soin"],["Prendre ses vitamines","pilule"],["Aérer la chambre","soleil"],["Ranger 10 min","menage"],["Bouger 20 min","sport"],["Lire 10 pages","livre"],["Préparer son sac","mallette"],["Se coucher avant minuit","lune"]];
 
 /* ---------- icônes ---------- */
 const sv = (inner, w = 1.8) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
@@ -761,7 +761,7 @@ function sheetShell(title, body, lead){
   $("#layer").innerHTML = `<div class="overlay" id="ov"><form class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="${esc(title)}" novalidate><div class="grab"></div><h3>${esc(title)}</h3>${lead ? `<p class="lead">${lead}</p>` : ""}${body}</form></div>`;
   sheetOpen = true;
   $("#ov").addEventListener("click", e => { if (e.target.id === "ov") closeSheet(); });
-  const first = $("#sheet input[type=text], #sheet textarea"); if (first && !first.value) setTimeout(() => first.focus(), 50);
+  const first = $("#sheet input[type=text], #sheet textarea"); if (first && !first.value && !first.hasAttribute("data-nofocus")) setTimeout(() => first.focus(), 50);
   $$("[data-pills] button").forEach(b => b.addEventListener("click", () => {
     const g = b.parentNode;
     if (g.dataset.multi) b.setAttribute("aria-pressed", String(b.getAttribute("aria-pressed") !== "true"));
@@ -1001,20 +1001,25 @@ function bindAlarmButtons(n){
   const c = $("#icsNote"); if (c) c.addEventListener("click", () => exportICS({id:n.id, title:n.text.replace(/\s+/g, " ").slice(0, 80), date:n.remind.date, time:n.remind.time, desc:n.text, remind:["0"]}));
 }
 
-/* ---------- habitudes ---------- */
-function openHabits(){
+/* ---------- habitudes : chaque ajout est immédiat, pas de limite ---------- */
+function openHabits(focusInput){
   const names = S.habits.map(h => nrm(h.name));
+  const sugg = HABIT_SUGG.filter(s => !names.includes(nrm(s[0])));
   sheetShell("Mes habitudes", `
-    ${S.habits.length ? `<div class="list">${S.habits.map(h => `<div class="bar c-etudes" style="min-height:54px"><span class="ico">${ic(iconOf(h, h.name, "etoile"))}</span><div class="main"><span class="title">${esc(h.name)}</span></div><button type="button" class="x" data-delhabit="${h.id}" aria-label="Retirer ${esc(h.name)}">${UI.x}</button></div>`).join("")}</div>` : ""}
-    <div class="field"><span class="lbl">Idées à ajouter</span><div class="pills" data-pills="sugg" data-multi="1">${HABIT_SUGG.filter(s => !names.includes(nrm(s[0]))).map(s => `<button type="button" data-val="${esc(s[0])}" data-icon="${s[1]}" aria-pressed="false">${ic(s[1])}${esc(s[0])}</button>`).join("")}</div></div>
-    <div class="field"><label for="f-hab">Ou une autre</label><input type="text" id="f-hab" placeholder="Prendre l'air 10 min"></div>
-    <div class="actions"><button class="btn block">Enregistrer</button></div>`, "Les gestes de base de chaque jour. Ils se décochent tout seuls le lendemain.");
+    <div class="field"><label for="f-hab">Ajouter une habitude</label>
+      <div class="addline"><input type="text" id="f-hab" placeholder="Lire 10 pages, prendre l'air…" autocomplete="off" enterkeyhint="done" ${focusInput ? "" : "data-nofocus"}><button type="submit" class="btn" aria-label="Ajouter" style="padding:0 16px">${UI.plus}</button></div></div>
+    ${sugg.length ? `<div class="field"><span class="lbl">Idées (touche pour ajouter)</span><div class="pills">${sugg.map(s => `<button type="button" data-addsugg="${esc(s[0])}" data-icon="${s[1]}">${ic(s[1])}${esc(s[0])}</button>`).join("")}</div></div>` : ""}
+    ${S.habits.length ? `<div class="field"><span class="lbl">Mes habitudes (${S.habits.length})</span><div class="list">${S.habits.map(h => `<div class="bar c-etudes" style="min-height:54px"><span class="ico">${ic(iconOf(h, h.name, "etoile"))}</span><div class="main"><span class="title">${esc(h.name)}</span></div><button type="button" class="x" data-delhabit="${h.id}" aria-label="Retirer ${esc(h.name)}">${UI.x}</button></div>`).join("")}</div></div>` : ""}
+    <div class="actions"><button type="button" class="btn block" id="habDone">Terminé</button></div>`, "Les gestes de base de chaque jour. Ils se décochent tout seuls le lendemain.");
+  const inp = $("#f-hab");
+  const add = (name, icon) => { S.habits.push({id:uid(), name, icon:icon || ""}); persist(); render(); };
+  $$("[data-addsugg]").forEach(b => b.addEventListener("click", () => { add(b.dataset.addsugg, b.dataset.icon); openHabits(); toast("Ajoutée : " + b.dataset.addsugg); }));
   $$("[data-delhabit]").forEach(b => b.addEventListener("click", () => { S.habits = S.habits.filter(h => h.id !== b.dataset.delhabit); persist(); render(); openHabits(); }));
+  $("#habDone").addEventListener("click", closeSheet);
   $("#sheet").addEventListener("submit", e => {
     e.preventDefault();
-    for (const b of $$('[data-pills="sugg"] button[aria-pressed="true"]')) S.habits.push({id:uid(), name:b.dataset.val, icon:b.dataset.icon});
-    const c = $("#f-hab").value.trim(); if (c) S.habits.push({id:uid(), name:c, icon:""});
-    persist(); closeSheet(); render();
+    const v = inp.value.trim(); if (!v){ inp.focus(); return; }
+    add(v); openHabits(true); toast("Ajoutée : " + v);
   });
 }
 
